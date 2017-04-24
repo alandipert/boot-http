@@ -22,14 +22,6 @@
 (def httpkit-dep
   '[http-kit "2.1.19"])
 
-(defn nrepl-deps
-  []
-  (letfn [(tools-nrepl? [spec]
-            (= 'org.clojure/tools.nrepl (first spec)))]
-    (if-not (some tools-nrepl? @repl/*default-dependencies*)
-      (conj @repl/*default-dependencies* '[org.clojure/tools.nrepl "0.2.11"])
-      @repl/*default-dependencies*)))
-
 (defn- silence-jetty! []
   (.put (System/getProperties) "org.eclipse.jetty.LEVEL" "WARN"))
 
@@ -48,7 +40,6 @@
    t ssl                bool "Serve via Jetty SSL connector on localhost on default port 3443 using cert from ./boot-http-keystore.jks"
    T ssl-props     SSL  edn  "Override default SSL properties e.g. \"{:port 3443, :keystore \"boot-http-keystore.jks\", :key-password \"p@ssw0rd\"}\""
    R reload             bool "Reload modified namespaces on each request."
-   n nrepl         REPL edn  "nREPL server parameters e.g. \"{:port 3001, :bind \"0.0.0.0\"}\""
    N not-found     SYM  sym "a ring handler for requested resources that aren't in your directory. Useful for pushState."]
 
   (let [port        (or port default-port)
@@ -58,10 +49,7 @@
                                  (str "Expected map for ssl-props got \"" ssl-props "\"")))
                         (merge ssl-defaults (or ssl-props {}))))
         server-dep  (if httpkit httpkit-dep jetty-dep)
-        deps        (cond-> serve-deps
-                      true               (conj server-dep)
-                      (not (nil? nrepl)) (concat (nrepl-deps)))
-
+        deps        (conj serve-deps server-dep)
         ;; Turn the middleware symbols into strings to prevent an attempt to
         ;; resolve the namespaces when the list is processed in the Boot pod.
         ;; Boot's middleware configuration is read outside of the pod to ensure
@@ -85,9 +73,6 @@
                            :reload '~reload, :env-dirs ~(vec (:directories pod/env)), :httpkit ~httpkit,
                            :not-found '~not-found,
                            :resource-root ~resource-root}))
-                       (def nrepl-server
-                         (when ~nrepl
-                           (http/nrepl-server {:nrepl (assoc ~nrepl :middleware (rsrv/->mw-list (map symbol ~middlewares)))})))
                        (when-not ~silent
                          (boot/info "Started %s on %s://localhost:%d\n"
                                (:human-name server)
@@ -97,10 +82,6 @@
       (silence-jetty!))
     (core/cleanup
      (pod/with-eval-in worker
-       (when nrepl-server
-         (when-not ~silent
-           (boot/info "Stopping boot-http nREPL server"))
-         (.stop nrepl-server))
        (when server
          (when-not ~silent
            (boot/info "Stopping %s\n" (:human-name server)))

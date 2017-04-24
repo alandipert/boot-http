@@ -1,3 +1,7 @@
+# master
+
+- Remove: nrepl functionality (the ability to REPL into pods is not provided by Boot)
+
 # 0.7.6
 
 - Add: load user-specific Boot nREPL middleware
